@@ -1,0 +1,189 @@
+@prefix doap:   <http://usefulinc.com/ns/doap#> .
+@prefix foaf:   <http://xmlns.com/foaf/0.1/> .
+@prefix lv2:    <http://lv2plug.in/ns/lv2core#> .
+@prefix rdf:    <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix rdfs:   <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix units:  <http://lv2plug.in/ns/extensions/units#> .
+@prefix pprops: <http://lv2plug.in/ns/ext/port-props#> .
+
+<http://dsheeler.org/>
+	a foaf:Person ;
+	foaf:name "Daniel Sheeler" ;
+	foaf:mbox <mailto:dsheeler@pobox.com> ;
+	foaf:homepage <http://dsheeler.org/> .
+
+<http://dsheeler.org/plugins/harmonizer>
+	a lv2:Plugin , lv2:ModulatorPlugin, doap:Project ;
+	doap:license <http://usefulinc.com/doap/licenses/gpl> ;
+  doap:maintainer <http://dsheeler.org/> ;
+  doap:name "Harmonizer" ;
+	@VERSION@
+  lv2:optionalFeature lv2:hardRTCapable ;
+	lv2:port [
+		a lv2:InputPort ,
+			lv2:ControlPort ;
+		lv2:index 0 ;
+		lv2:symbol "onset_method" ;
+		lv2:name "Onset Method" ;
+		lv2:default 0 ;
+		lv2:minimum 0 ;
+		lv2:maximum 8 ;
+    lv2:portProperty lv2:float, lv2:enumeration ;
+    lv2:scalePoint  [
+			rdfs:label "default (hfc)" ;
+			rdf:value 0
+		] , [
+			rdfs:label "energy" ;
+			rdf:value 1
+		] , [
+			rdfs:label "hfc" ;
+			rdf:value 2
+		] , [
+			rdfs:label "complex" ;
+			rdf:value 3
+		] , [
+			rdfs:label "phase" ;
+			rdf:value 4
+		] , [
+			rdfs:label "specdiff" ;
+			rdf:value 5
+		] , [
+			rdfs:label "kl" ;
+			rdf:value 6
+		] , [
+			rdfs:label "mkl" ;
+			rdf:value 7
+		] , [
+			rdfs:label "specflux" ;
+			rdf:value 8
+	  ]
+  ], [
+		a lv2:InputPort ,
+			lv2:ControlPort ;
+		lv2:index 1 ;
+		lv2:symbol "onset_threshold" ;
+		lv2:name "Onset Threshold";
+		lv2:default 0.3 ;
+		lv2:minimum 0.0 ;
+		lv2:maximum 1.0 ;
+		lv2:scalePoint [
+			rdfs:label "0" ;
+			rdf:value 0.0
+		];
+		lv2:scalePoint [
+			rdfs:label "0.001" ;
+			rdf:value 0.001
+		];
+		lv2:scalePoint [
+			rdfs:label "0.3" ;
+			rdf:value 0.3
+		];
+		lv2:scalePoint [
+			rdfs:label "0.5" ;
+			rdf:value 0.5
+		];
+		lv2:scalePoint [
+			rdfs:label "0.9" ;
+			rdf:value 0.9
+		];
+		lv2:scalePoint [
+			rdfs:label "1" ;
+			rdf:value 1.0
+		];
+	], [
+		a lv2:InputPort ,
+			lv2:ControlPort ;
+		lv2:index 2 ;
+		lv2:symbol "silence_threshold" ;
+		lv2:name "Silence Threshold";
+		lv2:default -90.0 ;
+		lv2:minimum -90.0 ;
+		lv2:maximum -10.0 ;
+		units:unit units:db ;
+		lv2:scalePoint [
+			rdfs:label "20" ;
+			rdf:value 20.0
+		];
+	], [
+		a lv2:InputPort ,
+			lv2:ControlPort ;
+		lv2:index 3 ;
+		lv2:symbol "pitch_method" ;
+		lv2:name "Pitch Detection Method" ;
+		lv2:default 0 ;
+		lv2:minimum 0 ;
+		lv2:maximum 5 ;
+    lv2:portProperty lv2:float, lv2:enumeration ;
+    lv2:scalePoint  [
+			rdfs:label "default (yinfft)" ;
+			rdf:value 0
+		] , [
+			rdfs:label "schmitt" ;
+			rdf:value 1
+		] , [
+			rdfs:label "fcomb" ;
+			rdf:value 2
+		] , [
+			rdfs:label "mcomb" ;
+			rdf:value 3
+		] , [
+			rdfs:label "yin" ;
+			rdf:value 4
+		] , [
+			rdfs:label "yinfft" ;
+			rdf:value 5
+		]
+  ], [
+		a lv2:InputPort ,
+			lv2:ControlPort ;
+		lv2:index 4 ;
+		lv2:symbol "pitch_threshold" ;
+		lv2:name "Pitch Detection Threshold";
+		lv2:default 0.85 ;
+		lv2:minimum 0.0 ;
+		lv2:maximum 1.0 ;
+		lv2:scalePoint [
+			rdfs:label "0" ;
+			rdf:value 0.0
+		];
+		lv2:scalePoint [
+			rdfs:label "0.0" ;
+			rdf:value 0.0
+		];
+		lv2:scalePoint [
+			rdfs:label "0.15" ;
+			rdf:value 0.15
+		];
+		lv2:scalePoint [
+			rdfs:label "0.85" ;
+			rdf:value 0.85
+		];
+		lv2:scalePoint [
+			rdfs:label "1" ;
+			rdf:value 1.0
+		];
+	], [
+		a lv2:AudioPort ,
+			lv2:InputPort ;
+		lv2:index 5 ;
+		lv2:symbol "in_1" ;
+		lv2:name "In 1"
+	] , [
+		a lv2:AudioPort ,
+			lv2:InputPort ;
+		lv2:index 6 ;
+		lv2:symbol "in_2" ;
+		lv2:name "In 2"
+	] , [
+		a lv2:AudioPort ,
+			lv2:OutputPort ;
+		lv2:index 7 ;
+		lv2:symbol "out_1" ;
+		lv2:name "Out 1"
+	] , [
+		a lv2:AudioPort ,
+			lv2:OutputPort ;
+		lv2:index 8 ;
+		lv2:symbol "out_2" ;
+		lv2:name "Out 2"
+	] .
