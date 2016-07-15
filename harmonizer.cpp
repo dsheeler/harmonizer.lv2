@@ -15,12 +15,10 @@
   OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 */
 
-#include <time.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <getopt.h>
-#include <signal.h>
 #include <unistd.h>
 #include <stdarg.h>
 #include <jack/jack.h>
@@ -28,16 +26,18 @@
 #include <aubio/pitch/pitch.h>
 #include <aubio/mathutils.h>
 #include <Stk.h>
-#include <Cubic.h>
 #include <Instrmnt.h>
 #include <Voicer.h>
 #include <JCRev.h>
 #include "utilities.h"
 #include <algorithm>
-#include <map>
 
-#include "lv2/lv2plug.in/ns/lv2core/lv2.h"
+#include "lv2/lv2plug.in/ns/ext/atom/atom.h"
+#include "lv2/lv2plug.in/ns/ext/atom/forge.h"
+#include "lv2/lv2plug.in/ns/ext/atom/util.h"
+#include "lv2/lv2plug.in/ns/ext/midi/midi.h"
 #include "lv2/lv2plug.in/ns/ext/log/logger.h"
+#include "lv2/lv2plug.in/ns/lv2core/lv2.h"
 
 #define HARMONIZER_URI "http://dsheeler.org/plugins/harmonizer"
 #define NUM_STRINGS 3
@@ -53,12 +53,13 @@ typedef enum {
   HARMONIZER_INPUT_1  = 5,
   HARMONIZER_INPUT_2  = 6,
 	HARMONIZER_OUTPUT_1 = 7,
-  HARMONIZER_OUTPUT_2 = 8
+  HARMONIZER_OUTPUT_2 = 8,
+  HARMONIZER_MIDI_OUT = 9
 } PortIndex;
-
 
 char *onset_methods[NUM_ONSET_METHODS];
 char *pitch_methods[NUM_PITCH_METHODS];
+
 using namespace stk;
 
 typedef jack_default_audio_sample_t sample_t;
@@ -70,11 +71,20 @@ struct string_info {
 };
 
 typedef struct {
+  LV2_Atom_Event event;
+  uint8_t msg[3];
+} MIDI_note_event;
+
+
+typedef struct {
   aubio_onset_t *onsets[NUM_ONSET_METHODS];
   aubio_onset_t *onsets_2[NUM_ONSET_METHODS];
   aubio_pitch_t *pitches_1[NUM_PITCH_METHODS];
   aubio_pitch_t *pitches_2[NUM_PITCH_METHODS];
   LV2_Log_Logger logger;
+  LV2_Atom_Forge forge;
+  LV2_Atom_Forge_Frame midi_out_frame;
+  uint32_t frame_offset;
   const float* onset_method;
   const float* onset_threshold;
 	const float* silence_threshold;
@@ -84,6 +94,7 @@ typedef struct {
   const float* input_2;
 	float*       output_1;
 	float*       output_2;
+  LV2_Atom_Sequence* midi_out;
   smpl_t bufsize;
   smpl_t hopsize;
   char_t *pitch_unit;
@@ -126,7 +137,6 @@ typedef struct {
   StkFloat distortionGain;
   StkFloat distortionMix;
   Delay feedbackDelay;
-  Cubic distortion;
   StkFloat feedbackSample;
 } Harmonizer;
 
@@ -150,12 +160,10 @@ uint_t get_note (fvec_t * note_buffer, fvec_t * note_buffer2) {
   return fvec_median (note_buffer2);
 }
 
-void setup_aubio(Harmonizer *harm) {
-}
-
 void send_noteon_1(smpl_t note, smpl_t level, void *usr) {
   Harmonizer *harm = (Harmonizer *)usr;
   if (note > 0) {
+    MIDI_note_event noteon;
     smpl_t midi_note = aubio_freqtomidi(note);
     harm->voicer_1->noteOn(midi_note, level);
     harm->voicer_1->noteOn(midi_note + 4, level);
@@ -188,6 +196,7 @@ instantiate(const LV2_Descriptor*     descriptor,
             const LV2_Feature* const* features) {
 	Harmonizer* harm = (Harmonizer*)malloc(sizeof(Harmonizer));
   lv2_log_logger_init(&harm->logger, NULL, NULL);
+  //lv2_atom_forge_init(
   harm->samplerate = (float)rate;
   lv2_log_trace(&harm->logger, "samplerate: %f", harm->samplerate);
   harm->bufsize = 128;
@@ -254,7 +263,7 @@ connect_port(LV2_Handle instance,
 	switch ((PortIndex)port) {
 	case HARMONIZER_ONSET_METHOD:
 		harm->onset_method = (float *)data;
- 	break;
+    break;
 	case HARMONIZER_ONSET_THRESHOLD:
 		harm->onset_threshold = (float *)data;
 		break;
@@ -267,7 +276,7 @@ connect_port(LV2_Handle instance,
  	case HARMONIZER_PITCH_THRESHOLD:
 		harm->pitch_threshold = (float *)data;
 		break;
- case HARMONIZER_INPUT_1:
+  case HARMONIZER_INPUT_1:
 		harm->input_1 = (float *)data;
 		break;
 	case HARMONIZER_INPUT_2:
@@ -279,14 +288,15 @@ connect_port(LV2_Handle instance,
 	case HARMONIZER_OUTPUT_2:
 		harm->output_2 = (float *)data;
 		break;
-	}
+  case HARMONIZER_MIDI_OUT:
+    harm->midi_out = (LV2_Atom_Sequence *)data;
+    break;
+  }
 }
 
 static void
 activate(LV2_Handle instance)
 {
-  Harmonizer* harm = (Harmonizer*) instance;
-  lv2_log_trace(&harm->logger, "samplerate: %f\n", harm->samplerate);
 }
 
 static void
