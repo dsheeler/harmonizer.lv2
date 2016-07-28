@@ -33,6 +33,7 @@
 #include <algorithm>
 
 #include "lv2/lv2plug.in/ns/ext/atom/atom.h"
+#include <lv2/lv2plug.in/ns/ext/urid/urid.h>
 #include "lv2/lv2plug.in/ns/ext/atom/forge.h"
 #include "lv2/lv2plug.in/ns/ext/atom/util.h"
 #include "lv2/lv2plug.in/ns/ext/midi/midi.h"
@@ -43,6 +44,14 @@
 #define NUM_STRINGS 3
 #define NUM_ONSET_METHODS 9
 #define NUM_PITCH_METHODS 6
+
+typedef struct {
+  LV2_URID atom_Blank;
+  LV2_URID atom_Object;
+  LV2_URID atom_Sequence;
+  LV2_URID midi_MidiEvent;
+  LV2_URID atom_URID;
+} MidiGenURIs;
 
 typedef enum {
 	HARMONIZER_ONSET_METHOD   = 0,
@@ -81,9 +90,12 @@ typedef struct {
   aubio_onset_t *onsets_2[NUM_ONSET_METHODS];
   aubio_pitch_t *pitches_1[NUM_PITCH_METHODS];
   aubio_pitch_t *pitches_2[NUM_PITCH_METHODS];
+  LV2_Log_Log* log;
   LV2_Log_Logger logger;
+  LV2_URID_Map* map;
+  MidiGenURIs uris;
   LV2_Atom_Forge forge;
-  LV2_Atom_Forge_Frame midi_out_frame;
+  LV2_Atom_Forge_Frame frame;
   uint32_t frame_offset;
   const float* onset_method;
   const float* onset_threshold;
@@ -143,6 +155,55 @@ typedef struct {
 const char *err_buf;
 int intval;
 
+/** map uris */
+static void
+map_mem_uris (LV2_URID_Map* map, MidiGenURIs* uris)
+{
+  uris->atom_Blank         = map->map (map->handle, LV2_ATOM__Blank);
+  uris->atom_Object        = map->map (map->handle, LV2_ATOM__Object);
+  uris->midi_MidiEvent     = map->map (map->handle, LV2_MIDI__MidiEvent);
+  uris->atom_Sequence      = map->map (map->handle, LV2_ATOM__Sequence);
+  uris->atom_URID          = map->map (map->handle, LV2_ATOM__URID);
+}
+
+/**
+ *  * add a midi message to the output port
+ *   */
+static void
+forge_midimessage (Harmonizer* self,
+    uint32_t tme,
+    const uint8_t* const buffer,
+    uint32_t size)
+{
+  LV2_Atom midiatom;
+  midiatom.type = self->uris.midi_MidiEvent;
+  midiatom.size = size;
+
+  if (0 == lv2_atom_forge_frame_time (&self->forge, tme)) return;
+  if (0 == lv2_atom_forge_raw (&self->forge, &midiatom, sizeof (LV2_Atom))) return;
+  if (0 == lv2_atom_forge_raw (&self->forge, buffer, size)) return;
+  lv2_atom_forge_pad (&self->forge, sizeof (LV2_Atom) + size);
+}
+
+static void
+midi_panic (Harmonizer* self)
+{
+  uint8_t event[3];
+  event[2] = 0;
+
+  for (uint32_t c = 0; c < 0xf; ++c) {
+    event[0] = 0xb0 | c;
+    event[1] = 0x40; // sustain pedal
+    forge_midimessage (self, 0, event, 3);
+    event[1] = 0x7b; // all notes off
+    forge_midimessage (self, 0, event, 3);
+#if 0
+    event[1] = 0x78; // all sound off
+    forge_midimessage (self, 0, event, 3);
+#endif
+  }
+}
+
 void note_append(fvec_t *note_buffer, smpl_t curnote) {
   uint_t i = 0;
   for (i = 0; i < note_buffer->length - 1; i++) {
@@ -163,8 +224,12 @@ uint_t get_note (fvec_t * note_buffer, fvec_t * note_buffer2) {
 void send_noteon_1(smpl_t note, smpl_t level, void *usr) {
   Harmonizer *harm = (Harmonizer *)usr;
   if (note > 0) {
-    MIDI_note_event noteon;
-    smpl_t midi_note = aubio_freqtomidi(note);
+    smpl_t midi_note = floor(0.5 + aubio_freqtomidi(note));
+    uint8_t event[3];
+    event[0] = 0x90;
+    event[1] = (uint8_t)midi_note;
+    event[2] = (uint8_t)level;
+    forge_midimessage(harm, 0, event, 3);
     harm->voicer_1->noteOn(midi_note, level);
     harm->voicer_1->noteOn(midi_note + 4, level);
     harm->voicer_1->noteOn(midi_note + 7, level);
@@ -172,9 +237,13 @@ void send_noteon_1(smpl_t note, smpl_t level, void *usr) {
 }
 
 void send_noteoff_1(smpl_t note, smpl_t level, void *usr) {
-  return;
   Harmonizer *harm = (Harmonizer *)usr;
   smpl_t midi_note = aubio_freqtomidi(note);
+  uint8_t event[3];
+  event[0] = 0x80;
+  event[1] = (uint8_t)midi_note;
+  event[2] = (uint8_t)level;
+  forge_midimessage(harm, 0, event, 3);
   harm->voicer_1->noteOff(midi_note, level);
   harm->voicer_1->noteOff(midi_note + 4, level);
   harm->voicer_1->noteOff(midi_note + 7, level);
@@ -189,14 +258,29 @@ void send_noteon_2(smpl_t note, smpl_t level, void *usr) {
     harm->voicer_2->noteOn(midi_note + 7, level);
   }
 }
+
 static LV2_Handle
 instantiate(const LV2_Descriptor*     descriptor,
-            double                    rate,
-            const char*               bundle_path,
-            const LV2_Feature* const* features) {
-	Harmonizer* harm = (Harmonizer*)malloc(sizeof(Harmonizer));
-  lv2_log_logger_init(&harm->logger, NULL, NULL);
-  //lv2_atom_forge_init(
+    double                    rate,
+    const char*               bundle_path,
+    const LV2_Feature* const* features) {
+  Harmonizer* harm = (Harmonizer*)malloc(sizeof(Harmonizer));
+
+  for (int i = 0; features[i]; ++i) {
+    if (!strcmp (features[i]->URI, LV2_URID__map)) {
+      harm->map = (LV2_URID_Map*)features[i]->data;
+    } else if (!strcmp (features[i]->URI, LV2_LOG__log)) {
+      harm->log = (LV2_Log_Log*)features[i]->data;
+    }
+  }
+  lv2_log_logger_init(&harm->logger, harm->map, harm->log);
+  if (!harm->map) {
+    lv2_log_error (&harm->logger, "MidiGen.lv2 error: Host does not support urid:map\n");
+    free (harm);
+    return NULL;
+  }
+  lv2_atom_forge_init (&harm->forge, harm->map);
+  map_mem_uris (harm->map, &harm->uris);
   harm->samplerate = (float)rate;
   lv2_log_trace(&harm->logger, "samplerate: %f", harm->samplerate);
   harm->bufsize = 128;
@@ -308,7 +392,10 @@ static void
 run(LV2_Handle instance, uint32_t n_samples)
 {
   Harmonizer *harm = (Harmonizer*)instance;
-	const float *input_1  = harm->input_1;
+	const uint32_t capacity = harm->midi_out->atom.size;
+  lv2_atom_forge_set_buffer(&harm->forge, (uint8_t*)harm->midi_out, capacity);
+  lv2_atom_forge_sequence_head(&harm->forge, &harm->frame, 0);
+  const float *input_1  = harm->input_1;
 	const float *input_2  = harm->input_2;
 	float *const output_1 = harm->output_1;
 	float *const output_2 = harm->output_2;

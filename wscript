@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 from waflib.extras import autowaf as autowaf
 import re
+import sys
 
 # Variables for 'waf dist'
 APPNAME = 'harmonizer.lv2'
@@ -22,8 +23,14 @@ def configure(conf):
     autowaf.display_header('Harmonizer Configuration')
     conf.env.append_value('INCLUDES', ['/usr/local/include/stk'])
     conf.check_cxx(lib = 'stk')
+    conf.env.append_unique('CXXFLAGS', ['-O2','-funroll-loops','-std=c++0x'])
+
+    if sys.maxint >= 9223372036854775807:
+        print "detected 64 bit architecture, enabling -fPIC"
+        conf.env.append_unique('CXXFLAGS', ['-fPIC','-fpermissive','-finline-functions'])
+
     if not autowaf.is_child():
-        autowaf.check_pkg(conf, 'lv2', atleast_version='1.2.1', uselib_store='LV2')
+        autowaf.check_pkg(conf, 'lv2core', uselib_store='LV2CORE')
         autowaf.check_pkg(conf, 'aubio', uselib_store='AUBIO')
     # Set env['pluginlib_PATTERN']
     pat = conf.env['cshlib_PATTERN']
@@ -73,8 +80,8 @@ def build(bld):
               name         = 'harmonizer',
               target       = '%s/harmonizer' % bundle,
               install_path = '${LV2DIR}/%s' % bundle,
-              cxxflags     = '-fPIC',
-              use          = 'LV2 AUBIO',
+              rpath        = '/usr/local/lib',
+              linkflags    = '-lstk',
+              uselib       = 'LV2CORE AUBIO',
               includes     = includes)
     #obj.env.cshlib_PATTERN = module_pat
-    bld.install_files('${LV2DIR}/harmonizer.lv2/', bld.path.ant_glob('build/*'))
