@@ -168,32 +168,20 @@
   a lv2:AudioPort ,
   lv2:InputPort ;
   lv2:index 5 ;
-  lv2:symbol "in_1" ;
-  lv2:name "In 1"
+  lv2:symbol "in" ;
+  lv2:name "In"
   ] , [
   a lv2:AudioPort ,
-  lv2:InputPort ;
+  lv2:OutputPort ;
   lv2:index 6 ;
-  lv2:symbol "in_2" ;
-  lv2:name "In 2"
-  ] , [
-  a lv2:AudioPort ,
-  lv2:OutputPort ;
-  lv2:index 7 ;
-  lv2:symbol "out_1" ;
-  lv2:name "Out 1"
-  ] , [
-  a lv2:AudioPort ,
-  lv2:OutputPort ;
-  lv2:index 8 ;
-  lv2:symbol "out_2" ;
-  lv2:name "Out 2"
+  lv2:symbol "out" ;
+  lv2:name "Out"
   ] , [
   a lv2:OutputPort ,
   atom:AtomPort ;
   atom:bufferType atom:Sequence ;
   atom:supports midi:MidiEvent ;
-  lv2:index 9 ;
+  lv2:index 7 ;
   lv2:symbol "midi_out" ;
   lv2:name "Midi Out"
 	] .
