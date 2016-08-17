@@ -1,0 +1,38 @@
+@prefix modgui: <http://moddevices.com/ns/modgui#> .
+@prefix lv2:    <http://lv2plug.in/ns/lv2core#> .
+
+<http://dsheeler.org/plugins/harmonizer>
+    modgui:gui [
+        modgui:resourcesDirectory <modgui> ;
+        modgui:iconTemplate <modgui/icon-harmonizer.html> ;
+        modgui:stylesheet <modgui/stylesheet-harmonizer.css> ;
+        modgui:screenshot <modgui/screenshot-harmonizer.png> ;
+        modgui:thumbnail <modgui/thumbnail-harmonizer.png> ;
+        modgui:brand "Daniel Sheeler" ;
+        modgui:label "Harmonizer" ;
+        modgui:model "boxy" ;
+        modgui:panel "1-select-4-knobs" ;
+        modgui:color "lava" ;
+        modgui:knob "aluminium" ;
+        modgui:port [
+            lv2:index 0 ;
+            lv2:symbol "onset_method" ;
+            lv2:name "Onset Method" ;
+        ] , [
+            lv2:index 1 ;
+            lv2:symbol "onset_threshold" ;
+            lv2:name "Onset Threshold" ;
+        ] , [
+            lv2:index 2 ;
+            lv2:symbol "silence_threshold" ;
+            lv2:name "Silence Threshold" ;
+        ] , [
+            lv2:index 3 ;
+            lv2:symbol "pitch_method" ;
+            lv2:name "Pitch Detection Method" ;
+        ] , [
+            lv2:index 4 ;
+            lv2:symbol "pitch_threshold" ;
+            lv2:name "Pitch Detection Threshold" ;
+        ] ;
+    ] .

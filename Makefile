@@ -3,6 +3,7 @@ OPTIMIZATIONS ?= -msse -msse2 -mfpmath=sse -ffast-math -fomit-frame-pointer\
 								 -O3 -fno-finite-math-only
 PREFIX ?= /usr/local
 CFLAGS ?= $(OPTIMIZATIONS) -Wall
+LV2DIR ?= $(PREFIX)/lib/lv2
 
 STRIP?=strip
 STRIPFLAGS?=-s
@@ -11,12 +12,11 @@ harmonizer_VERSION?=$(shell git describe --tags HEAD 2>/dev/null\
 									 	| sed 's/-g.*$$//;s/^v//' || echo "LV2")
 ###############################################################################
 LIB_EXT=.so
+BUILDDIR=build/
 
-LV2DIR ?= $(PREFIX)/lib/lv2
 LOADLIBES=-lm
 LV2NAME=harmonizer
 BUNDLE=harmonizer.lv2
-BUILDDIR=build/
 targets=
 SRCS =
 OBJS = $(BUILDDIR)utilities.o
@@ -47,9 +47,21 @@ ifneq ($(XWIN),)
 endif
 
 targets+=$(BUILDDIR)$(LV2NAME)$(LIB_EXT)
+
+ifneq ($(MOD),)
+  targets+=$(BUILDDIR)modgui
+  MODLABEL=mod:label \"Step Seq. $(N_STEPS)x$(N_NOTES)\";
+  MODBRAND=mod:brand \"x42\";
+  MODGUILABEL=modgui:label \"Step Seq. $(N_STEPS)x$(N_NOTES)\";
+  MODGUIBRAND=modgui:brand \"x42\";
+else
+  MODLABEL=
+  MODBRAND=
+endif
+
 ###############################################################################
 # extract versions
-LV2VERSION=$(testsignal_VERSION)
+LV2VERSION=$(harmonizer_VERSION)
 include git2lv2.mk
 
 # check for build-dependencies
@@ -59,12 +71,10 @@ endif
 
 override CFLAGS += -fPIC
 override CFLAGS += `pkg-config --cflags lv2`
-override CFLAGS += `pkg-config --cflags jack`
 override CFLAGS += `pkg-config --cflags aubio`
 override CFLAGS += -I/usr/local/include/stk
 
 override LDFLAGS += `pkg-config --libs aubio`
-override LDFLAGS += `pkg-config --libs jack`
 override LDFLAGS += -Wl,-rpath=/usr/local/lib -lstk
 
 # build target definitions
@@ -78,15 +88,19 @@ lv2syms:
 $(BUILDDIR)%.o : %.cpp
 	$(CC) $(CPPFLAGS) $(CFLAGS) -c -o $@ $<
 
-$(BUILDDIR)manifest.ttl: manifest.ttl.in
+$(BUILDDIR)manifest.ttl: lv2ttl/manifest.ttl.in Makefile
 	@mkdir -p $(BUILDDIR)
 	sed "s/@LV2NAME@/$(LV2NAME)/;s/@LIB_EXT@/$(LIB_EXT)/" \
-	  manifest.ttl.in > $(BUILDDIR)manifest.ttl
+	  lv2ttl/manifest.ttl.in > $(BUILDDIR)manifest.ttl
+ifneq ($(MOD),)
+	sed "s/@LV2NAME@/$(LV2NAME)/;s/@URISUFFIX@/$(URISUFFIX)/;s/@MODBRAND@/$(MODGUIBRAND)/;s/@MODLABEL@/$(MODGUILABEL)/" \
+		lv2ttl/manifest.modgui.in >> $(BUILDDIR)manifest.ttl
+endif
 
-$(BUILDDIR)$(LV2NAME).ttl: $(LV2NAME).ttl.in
+$(BUILDDIR)$(LV2NAME).ttl: lv2ttl/$(LV2NAME).ttl.in Makefile
 	@mkdir -p $(BUILDDIR)
 	sed "s/@VERSION@/lv2:microVersion $(LV2MIC) ;lv2:minorVersion $(LV2MIN) ;/g" \
-		$(LV2NAME).ttl.in > $(BUILDDIR)$(LV2NAME).ttl
+		lv2ttl/$(LV2NAME).ttl.in > $(BUILDDIR)$(LV2NAME).ttl
 
 $(BUILDDIR)$(LV2NAME)$(LIB_EXT): $(OBJS) $(LV2NAME).cpp
 	@mkdir -p $(BUILDDIR)
@@ -95,22 +109,32 @@ $(BUILDDIR)$(LV2NAME)$(LIB_EXT): $(OBJS) $(LV2NAME).cpp
 		$(OBJS) -shared $(LV2LDFLAGS) $(LDFLAGS) $(LOADLIBES)
 	$(STRIP) $(STRIPFLAGS) $(BUILDDIR)$(LV2NAME)$(LIB_EXT)
 
+$(BUILDDIR)modgui: $(BUILDDIR)$(LV2NAME).ttl
+	@mkdir -p $(BUILDDIR)/modgui
+	cp -r modgui/* $(BUILDDIR)modgui/
+
 # install/uninstall/clean target definitions
 
 install: all
 	install -d $(DESTDIR)$(LV2DIR)/$(BUNDLE)
 	install -m755 $(BUILDDIR)$(LV2NAME)$(LIB_EXT) $(DESTDIR)$(LV2DIR)/$(BUNDLE)
 	install -m644 $(BUILDDIR)manifest.ttl $(BUILDDIR)$(LV2NAME).ttl $(DESTDIR)$(LV2DIR)/$(BUNDLE)
+ifneq ($(MOD),)
+	install -d $(DESTDIR)$(LV2DIR)/$(BUNDLE)/modgui
+	install -t $(DESTDIR)$(LV2DIR)/$(BUNDLE)/modgui $(BUILDDIR)modgui/*
+endif
 
 uninstall:
 	rm -f $(DESTDIR)$(LV2DIR)/$(BUNDLE)/manifest.ttl
 	rm -f $(DESTDIR)$(LV2DIR)/$(BUNDLE)/$(LV2NAME).ttl
 	rm -f $(DESTDIR)$(LV2DIR)/$(BUNDLE)/$(LV2NAME)$(LIB_EXT)
+	rm -rf $(DESTDIR)$(LV2DIR)/$(BUNDLE)/modgui
 	-rmdir $(DESTDIR)$(LV2DIR)/$(BUNDLE)
 
 clean:
 	rm -f $(BUILDDIR)manifest.ttl $(BUILDDIR)$(LV2NAME).ttl \
 		$(BUILDDIR)/*.o  $(BUILDDIR)$(LV2NAME)$(LIB_EXT) lv2syms
+	rm -rf $(BUILDDIR)modgui
 	-test -d $(BUILDDIR) && rmdir $(BUILDDIR) || true
 
 .PHONY: clean all install uninstall
