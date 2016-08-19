@@ -15,7 +15,7 @@
 	foaf:homepage <http://dsheeler.org/> .
 
   <http://dsheeler.org/plugins/harmonizer>
-  a lv2:Plugin , lv2:ModulatorPlugin, doap:Project ;
+  a lv2:Plugin , lv2:UtilityPlugin, doap:Project ;
   doap:license <http://usefulinc.com/doap/licenses/gpl> ;
   doap:maintainer <http://dsheeler.org/> ;
   doap:name "Harmonizer" ;
@@ -170,18 +170,12 @@
   lv2:index 5 ;
   lv2:symbol "in" ;
   lv2:name "In"
-  ] , [
-  a lv2:AudioPort ,
-  lv2:OutputPort ;
-  lv2:index 6 ;
-  lv2:symbol "out" ;
-  lv2:name "Out"
-  ] , [
+  ], [
   a lv2:OutputPort ,
   atom:AtomPort ;
   atom:bufferType atom:Sequence ;
   atom:supports midi:MidiEvent ;
-  lv2:index 7 ;
+  lv2:index 6 ;
   lv2:symbol "midi_out" ;
   lv2:name "Midi Out"
 	] .

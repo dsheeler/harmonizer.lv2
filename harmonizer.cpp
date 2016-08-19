@@ -16,6 +16,7 @@
 */
 
 #include <stdio.h>
+#include <math.h>
 #include <stdlib.h>
 #include <string.h>
 #include <getopt.h>
@@ -26,11 +27,6 @@
 #include <aubio/aubio.h>
 #include <aubio/pitch/pitch.h>
 #include <aubio/mathutils.h>
-#include <Stk.h>
-#include <Instrmnt.h>
-#include <Voicer.h>
-#include <JCRev.h>
-#include "utilities.h"
 #include <algorithm>
 
 #include "lv2/lv2plug.in/ns/ext/atom/atom.h"
@@ -43,7 +39,6 @@
 
 #define HARMONIZER_URI "http://dsheeler.org/plugins/harmonizer"
 #define RB_SIZE 16384
-#define NUM_STRINGS 3
 #define NUM_ONSET_METHODS 9
 #define NUM_PITCH_METHODS 6
 
@@ -53,7 +48,7 @@ typedef struct {
   LV2_URID atom_Sequence;
   LV2_URID midi_MidiEvent;
   LV2_URID atom_URID;
-} MidiGenURIs;
+} harmonizer_URIs;
 
 typedef enum {
 	HARMONIZER_ONSET_METHOD   = 0,
@@ -62,22 +57,11 @@ typedef enum {
 	HARMONIZER_PITCH_METHOD   = 3,
   HARMONIZER_PITCH_THRESHOLD = 4,
   HARMONIZER_INPUT  = 5,
-	HARMONIZER_OUTPUT = 6,
-  HARMONIZER_MIDI_OUT = 7
+  HARMONIZER_MIDI_OUT = 6
 } PortIndex;
 
 char *onset_methods[NUM_ONSET_METHODS];
 char *pitch_methods[NUM_PITCH_METHODS];
-
-using namespace stk;
-
-typedef jack_default_audio_sample_t sample_t;
-
-struct string_info {
-  bool         in_use;
-  unsigned int inote;
-  string_info() : in_use(false), inote(0) {};
-};
 
 typedef struct {
   LV2_Atom_Event event;
@@ -91,7 +75,7 @@ typedef struct {
   LV2_Log_Log* log;
   LV2_Log_Logger logger;
   LV2_URID_Map* map;
-  MidiGenURIs uris;
+  harmonizer_URIs uris;
   LV2_Atom_Forge forge;
   LV2_Atom_Forge_Frame frame;
   uint32_t frame_offset;
@@ -101,7 +85,6 @@ typedef struct {
   const float* pitch_method;
   const float* pitch_threshold;
   const float* input;
-	float*       output;
   LV2_Atom_Sequence* midi_out;
   jack_ringbuffer_t* ringbuf;
   smpl_t bufsize;
@@ -119,23 +102,7 @@ typedef struct {
   fvec_t *note_buffer;
   fvec_t *note_buffer2;
   fvec_t *onset;
-  Instrmnt **instrument;
-  string_info voices[NUM_STRINGS];
-  Voicer *voicer;
-  StkFloat volume;
-  StkFloat t60;
   smpl_t samplerate;
-  int nvoices;
-  int channels;
-  int counter;
-  int current_voice;
-  int frequency;
-  StkFloat feedbackGain;
-  StkFloat oldFeedbackGain;
-  StkFloat distortionGain;
-  StkFloat distortionMix;
-  Delay feedbackDelay;
-  StkFloat feedbackSample;
 } Harmonizer;
 
 const char *err_buf;
@@ -143,7 +110,7 @@ int intval;
 
 /** map uris */
 static void
-map_mem_uris (LV2_URID_Map* map, MidiGenURIs* uris)
+map_mem_uris (LV2_URID_Map* map, harmonizer_URIs* uris)
 {
   uris->atom_Blank         = map->map (map->handle, LV2_ATOM__Blank);
   uris->atom_Object        = map->map (map->handle, LV2_ATOM__Object);
@@ -171,25 +138,6 @@ forge_midimessage (Harmonizer* self,
   lv2_atom_forge_pad (&self->forge, sizeof (LV2_Atom) + size);
 }
 
-static void
-midi_panic (Harmonizer* self)
-{
-  uint8_t event[3];
-  event[2] = 0;
-
-  for (uint32_t c = 0; c < 0xf; ++c) {
-    event[0] = 0xb0 | c;
-    event[1] = 0x40; // sustain pedal
-    forge_midimessage (self, 0, event, 3);
-    event[1] = 0x7b; // all notes off
-    forge_midimessage (self, 0, event, 3);
-#if 0
-    event[1] = 0x78; // all sound off
-    forge_midimessage (self, 0, event, 3);
-#endif
-  }
-}
-
 void note_append(fvec_t *note_buffer, smpl_t curnote) {
   uint_t i = 0;
   for (i = 0; i < note_buffer->length - 1; i++) {
@@ -211,15 +159,11 @@ void send_noteon(smpl_t note, smpl_t level, void *usr) {
   Harmonizer *harm = (Harmonizer *)usr;
   if (note > 0) {
     smpl_t midi_note = floor(0.5 + aubio_freqtomidi(note));
-    lv2_log_trace(&harm->logger, "noteon note: %f midi_note %f\n", note, midi_note);
     uint8_t event[3];
     event[0] = 0x90;
     event[1] = (uint8_t)midi_note;
     event[2] = (uint8_t)level;
     forge_midimessage(harm, 0, event, 3);
-    harm->voicer->noteOn(midi_note, level);
-    harm->voicer->noteOn(midi_note + 4, level);
-    harm->voicer->noteOn(midi_note + 7, level);
   }
 }
 
@@ -231,9 +175,6 @@ void send_noteoff(smpl_t note, smpl_t level, void *usr) {
   event[1] = (uint8_t)midi_note;
   event[2] = (uint8_t)level;
   forge_midimessage(harm, 0, event, 3);
-  harm->voicer->noteOff(midi_note, level);
-  harm->voicer->noteOff(midi_note + 4, level);
-  harm->voicer->noteOff(midi_note + 7, level);
 }
 
 static LV2_Handle
@@ -270,9 +211,6 @@ instantiate(const LV2_Descriptor*     descriptor,
   harm->ab_out = new_fvec(1);
   harm->note_buffer = new_fvec(harm->median);
   harm->note_buffer2 = new_fvec(harm->median);
-  harm->nvoices = NUM_STRINGS;
-  harm->instrument = (Instrmnt **) calloc(harm->nvoices, sizeof(Instrmnt *));
-  harm->voicer = (Voicer *) new Voicer(0.0);
   onset_methods[0] = (char*)"default";
   onset_methods[1] = (char*)"energy";
   onset_methods[2] = (char*)"hfc";
@@ -288,11 +226,6 @@ instantiate(const LV2_Descriptor*     descriptor,
   pitch_methods[3] = (char*)"mcomb";
   pitch_methods[4] = (char*)"yin";
   pitch_methods[5] = (char*)"yinfft";
-  Stk::setRawwavePath("/usr/local/lib/stk/rawwaves");
-  for (int i = 0; i < harm->nvoices; i++) {
-    voiceByName((char*)"Plucked", &harm->instrument[i]);
-    harm->voicer->addInstrument(harm->instrument[i]);
-  }
   for (int i = 0; i < NUM_ONSET_METHODS; i++) {
     harm->onsets[i] = new_aubio_onset(onset_methods[i], harm->bufsize,
      harm->hopsize, harm->samplerate);
@@ -329,9 +262,6 @@ connect_port(LV2_Handle instance,
   case HARMONIZER_INPUT:
 		harm->input = (float *)data;
 		break;
-	case HARMONIZER_OUTPUT:
-		harm->output = (float *)data;
-		break;
   case HARMONIZER_MIDI_OUT:
     harm->midi_out = (LV2_Atom_Sequence *)data;
     break;
@@ -356,59 +286,45 @@ run(LV2_Handle instance, uint32_t n_samples)
   lv2_atom_forge_set_buffer(&harm->forge, (uint8_t*)harm->midi_out, capacity);
   lv2_atom_forge_sequence_head(&harm->forge, &harm->frame, 0);
   const float *input  = harm->input;
-  float *const output = harm->output;
-  uint_t i;
   float new_pitch;
-  uint_t ncalls = 0;
-  for (i = 0; i < n_samples; i++) {
+  for (uint i = 0; i < n_samples; i++) {
     if (jack_ringbuffer_write(harm->ringbuf, (const char*)(input + i), sizeof(smpl_t))
         < sizeof(smpl_t)) {
       harm->overruns++;
     }
-    output[i] = 0.0;
   }
   while (jack_ringbuffer_read_space(harm->ringbuf) >= harm->bufsize) {
-    ncalls++;
     jack_ringbuffer_read(harm->ringbuf, (char*)harm->ab_in->data, sizeof(smpl_t) *
         harm->bufsize);
-  }
-  aubio_onset_set_threshold(harm->onsets[(int)*harm->onset_method],
-   (float)*harm->onset_threshold);
-  aubio_onset_do(harm->onsets[(int)*harm->onset_method],
-   harm->ab_in, harm->onset);
-  aubio_pitch_do(harm->pitches[(int)*harm->pitch_method],
-   harm->ab_in, harm->ab_out);
-  new_pitch = fvec_get_sample(harm->ab_out, 0);
-  note_append(harm->note_buffer, new_pitch);
-  harm->curlevel = aubio_level_detection(harm->ab_in,
-   *harm->silence_threshold);
-  if (harm->curlevel != 1) {
-    lv2_log_trace(&harm->logger, "freqs %f levels %f\n",
-     new_pitch, harm->curlevel);
-  }
-  if (fvec_get_sample(harm->onset, 0)) {
-    if (harm->curlevel == 1.0) {
-      harm->isready = 0;
-      send_noteoff(harm->curnote, 0, harm);
+    aubio_onset_set_threshold(harm->onsets[(int)*harm->onset_method],
+     (float)*harm->onset_threshold);
+    aubio_onset_do(harm->onsets[(int)*harm->onset_method],
+     harm->ab_in, harm->onset);
+    aubio_pitch_do(harm->pitches[(int)*harm->pitch_method],
+     harm->ab_in, harm->ab_out);
+    new_pitch = fvec_get_sample(harm->ab_out, 0);
+    note_append(harm->note_buffer, new_pitch);
+    harm->curlevel = aubio_level_detection(harm->ab_in,
+     *harm->silence_threshold);
+    if (fvec_get_sample(harm->onset, 0)) {
+      if (harm->curlevel == 1.0) {
+        harm->isready = 0;
+        send_noteoff(harm->curnote, 0, harm);
+      } else {
+        harm->isready = 1;
+      }
     } else {
-      harm->isready = 1;
-    }
-  } else {
-    if (harm->isready > 0)
-      harm->isready++;
-    if (harm->isready == harm->median) {
-      send_noteoff(harm->curnote, 0, harm);
-      harm->newnote = get_note(harm->note_buffer, harm->note_buffer2);
-      harm->curnote = harm->newnote;
-      if (harm->curnote > 0) {
-        lv2_log_trace(&harm->logger, "NOTE ON: %f %d\n", harm->curnote,
-         127+(int)floorf(harm->curlevel));
-        send_noteon(harm->curnote, 127+(int)floorf(harm->curlevel), harm);
+      if (harm->isready > 0)
+        harm->isready++;
+      if (harm->isready == harm->median) {
+        send_noteoff(harm->curnote, 0, harm);
+        harm->newnote = get_note(harm->note_buffer, harm->note_buffer2);
+        harm->curnote = harm->newnote;
+        if (harm->curnote > 0) {
+          send_noteon(harm->curnote, 127+(int)floorf(harm->curlevel), harm);
+        }
       }
     }
-  }
-  for (i = 0; i < n_samples; i++) {
-      output[i] = harm->voicer->tick();
   }
 }
 

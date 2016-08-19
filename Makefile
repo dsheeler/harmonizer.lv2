@@ -19,7 +19,6 @@ LV2NAME=harmonizer
 BUNDLE=harmonizer.lv2
 targets=
 SRCS =
-OBJS = $(BUILDDIR)utilities.o
 
 .SUFFIXES:
 
@@ -50,10 +49,10 @@ targets+=$(BUILDDIR)$(LV2NAME)$(LIB_EXT)
 
 ifneq ($(MOD),)
   targets+=$(BUILDDIR)modgui
-  MODLABEL=mod:label \"Step Seq. $(N_STEPS)x$(N_NOTES)\";
-  MODBRAND=mod:brand \"x42\";
-  MODGUILABEL=modgui:label \"Step Seq. $(N_STEPS)x$(N_NOTES)\";
-  MODGUIBRAND=modgui:brand \"x42\";
+  MODLABEL=mod:label \"Harmonizer\";
+  MODBRAND=mod:brand \"Daniel Sheeler\";
+  MODGUILABEL=modgui:label \"Harmonizer\";
+  MODGUIBRAND=modgui:brand \"Daniel Sheeler\";
 else
   MODLABEL=
   MODBRAND=
@@ -72,10 +71,8 @@ endif
 override CFLAGS += -fPIC
 override CFLAGS += `pkg-config --cflags lv2`
 override CFLAGS += `pkg-config --cflags aubio`
-override CFLAGS += -I/usr/local/include/stk
 
 override LDFLAGS += `pkg-config --libs aubio`
-override LDFLAGS += -Wl,-rpath=/usr/local/lib -lstk
 
 # build target definitions
 default: all
@@ -84,9 +81,6 @@ all: $(BUILDDIR)manifest.ttl $(BUILDDIR)$(LV2NAME).ttl $(targets)
 
 lv2syms:
 	echo "_lv2_descriptor" > lv2syms
-
-$(BUILDDIR)%.o : %.cpp
-	$(CC) $(CPPFLAGS) $(CFLAGS) -c -o $@ $<
 
 $(BUILDDIR)manifest.ttl: lv2ttl/manifest.ttl.in Makefile
 	@mkdir -p $(BUILDDIR)
@@ -102,11 +96,11 @@ $(BUILDDIR)$(LV2NAME).ttl: lv2ttl/$(LV2NAME).ttl.in Makefile
 	sed "s/@VERSION@/lv2:microVersion $(LV2MIC) ;lv2:minorVersion $(LV2MIN) ;/g" \
 		lv2ttl/$(LV2NAME).ttl.in > $(BUILDDIR)$(LV2NAME).ttl
 
-$(BUILDDIR)$(LV2NAME)$(LIB_EXT): $(OBJS) $(LV2NAME).cpp
+$(BUILDDIR)$(LV2NAME)$(LIB_EXT): $(LV2NAME).cpp
 	@mkdir -p $(BUILDDIR)
 	$(CC) $(CPPFLAGS) $(CFLAGS) \
 	  -o $(BUILDDIR)$(LV2NAME)$(LIB_EXT) $(LV2NAME).cpp \
-		$(OBJS) -shared $(LV2LDFLAGS) $(LDFLAGS) $(LOADLIBES)
+		-shared $(LV2LDFLAGS) $(LDFLAGS) $(LOADLIBES)
 	$(STRIP) $(STRIPFLAGS) $(BUILDDIR)$(LV2NAME)$(LIB_EXT)
 
 $(BUILDDIR)modgui: $(BUILDDIR)$(LV2NAME).ttl
