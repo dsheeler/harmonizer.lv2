@@ -70,14 +70,14 @@ endif
 
 override CFLAGS += -fPIC
 override CFLAGS += `pkg-config --cflags lv2`
-override CFLAGS += `pkg-config --cflags aubio`
+#override CFLAGS += `pkg-config --cflags aubio`
 
-override LDFLAGS += `pkg-config --libs aubio`
+#override LDFLAGS += `pkg-config --libs aubio`
 
 # build target definitions
 default: all
 
-all: $(BUILDDIR)manifest.ttl $(BUILDDIR)$(LV2NAME).ttl $(targets)
+all: aubio $(BUILDDIR)manifest.ttl $(BUILDDIR)$(LV2NAME).ttl $(targets)
 
 lv2syms:
 	echo "_lv2_descriptor" > lv2syms
@@ -96,11 +96,33 @@ $(BUILDDIR)$(LV2NAME).ttl: lv2ttl/$(LV2NAME).ttl.in Makefile
 	sed "s/@VERSION@/lv2:microVersion $(LV2MIC) ;lv2:minorVersion $(LV2MIN) ;/g" \
 		lv2ttl/$(LV2NAME).ttl.in > $(BUILDDIR)$(LV2NAME).ttl
 
-$(BUILDDIR)$(LV2NAME)$(LIB_EXT): $(LV2NAME).cpp
+AUBIO_SRCS = $(BUILDDIR)mathutils.c $(BUILDDIR)fvec.c $(BUILDDIR)onset.c $(BUILDDIR)peakpicker.c $(BUILDDIR)biquad.c $(BUILDDIR)filter.c $(BUILDDIR)lvec.c \
+						 $(BUILDDIR)specdesc.c $(BUILDDIR)statistics.c $(BUILDDIR)hist.c $(BUILDDIR)scale.c $(BUILDDIR)cvec.c $(BUILDDIR)pitch.c \
+						 $(BUILDDIR)pitchyinfft.c $(BUILDDIR)pitchyin.c $(BUILDDIR)pitchspecacf.c $(BUILDDIR)pitchfcomb.c \
+						 $(BUILDDIR)pitchmcomb.c $(BUILDDIR)pitchschmitt.c $(BUILDDIR)fft.c $(BUILDDIR)ooura_fft8g.c $(BUILDDIR)c_weighting.c \
+						 $(BUILDDIR)phasevoc.c
+AUBIO_OBJS= $(AUBIO_SRCS:.c=.o)
+.SUFFIXES:
+
+.SUFFIXES: .c
+
+aubio: aubio_init
+
+aubio_init:
+	@mkdir -p $(BUILDDIR)
+	cp -r aubio/* $(BUILDDIR)
+
+%.o : %.c
+	@mkdir -p $(BUILDDIR)
+	$(CC) $(CFLAGS) -I $(BUILDDIR) -c \
+	$< -o $@
+
+$(BUILDDIR)$(LV2NAME)$(LIB_EXT): $(LV2NAME).cpp $(AUBIO_OBJS)
 	@mkdir -p $(BUILDDIR)
 	$(CC) $(CPPFLAGS) $(CFLAGS) \
 	  -o $(BUILDDIR)$(LV2NAME)$(LIB_EXT) $(LV2NAME).cpp \
-		-shared $(LV2LDFLAGS) $(LDFLAGS) $(LOADLIBES)
+		-shared $(LV2LDFLAGS) $(LDFLAGS) $(LOADLIBES) \
+		$(AUBIO_OBJS)
 	$(STRIP) $(STRIPFLAGS) $(BUILDDIR)$(LV2NAME)$(LIB_EXT)
 
 $(BUILDDIR)modgui: $(BUILDDIR)$(LV2NAME).ttl
