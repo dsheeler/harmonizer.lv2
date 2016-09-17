@@ -22,12 +22,11 @@
 #include <getopt.h>
 #include <unistd.h>
 #include <stdarg.h>
-#include <jack/jack.h>
-#include <jack/ringbuffer.h>
 #include <aubio/aubio.h>
 #include <aubio/pitch/pitch.h>
 #include <aubio/mathutils.h>
 #include <algorithm>
+#include "RingBuffer.h"
 
 #include "lv2/lv2plug.in/ns/ext/atom/atom.h"
 #include <lv2/lv2plug.in/ns/ext/urid/urid.h>
@@ -86,7 +85,7 @@ typedef struct {
   const float* pitch_threshold;
   const float* input;
   LV2_Atom_Sequence* midi_out;
-  jack_ringbuffer_t* ringbuf;
+  RingBuffer* ringbuf;
   smpl_t bufsize;
   smpl_t hopsize;
   char_t *pitch_unit;
@@ -184,7 +183,7 @@ instantiate(const LV2_Descriptor*     descriptor,
     const LV2_Feature* const* features) {
   Harmonizer* harm = (Harmonizer*)malloc(sizeof(Harmonizer));
   for (int i = 0; i < 2; i++) {
-    harm->ringbuf = jack_ringbuffer_create(RB_SIZE);
+    harm->ringbuf = new RingBuffer(RB_SIZE);
   }
   for (int i = 0; features[i]; ++i) {
     if (!strcmp (features[i]->URI, LV2_URID__map)) {
@@ -205,9 +204,9 @@ instantiate(const LV2_Descriptor*     descriptor,
   harm->samplerate = (float)rate;
   harm->bufsize = 4096;
   harm->hopsize = harm->bufsize / 4;
-  harm->median = 6;
+  harm->median = 2;
   harm->onset = new_fvec(1);
-  harm->ab_in = new_fvec(harm->bufsize);
+  harm->ab_in = new_fvec(harm->hopsize);
   harm->ab_out = new_fvec(1);
   harm->note_buffer = new_fvec(harm->median);
   harm->note_buffer2 = new_fvec(harm->median);
@@ -288,18 +287,24 @@ run(LV2_Handle instance, uint32_t n_samples)
   const float *input  = harm->input;
   float new_pitch;
   for (uint i = 0; i < n_samples; i++) {
-    if (jack_ringbuffer_write(harm->ringbuf, (const char*)(input + i), sizeof(smpl_t))
-        < sizeof(smpl_t)) {
+    if (harm->ringbuf->Write((unsigned char*)(input + i), sizeof(smpl_t))
+        < (int)sizeof(smpl_t)) {
       harm->overruns++;
     }
   }
-  while (jack_ringbuffer_read_space(harm->ringbuf) >= harm->bufsize) {
-    jack_ringbuffer_read(harm->ringbuf, (char*)harm->ab_in->data, sizeof(smpl_t) *
-        harm->bufsize);
+  while (harm->ringbuf->GetReadAvail() >= harm->hopsize) {
+    harm->ringbuf->Read((unsigned char*)harm->ab_in->data, sizeof(smpl_t)
+     * harm->hopsize);
+    aubio_onset_set_silence(harm->onsets[(int)*harm->onset_method],
+     (float)*harm->silence_threshold);
     aubio_onset_set_threshold(harm->onsets[(int)*harm->onset_method],
      (float)*harm->onset_threshold);
     aubio_onset_do(harm->onsets[(int)*harm->onset_method],
      harm->ab_in, harm->onset);
+    aubio_pitch_set_tolerance(harm->pitches[(int)*harm->pitch_method],
+     (float)*harm->pitch_threshold);
+    aubio_pitch_set_silence(harm->pitches[(int)*harm->pitch_method],
+     (float)*harm->silence_threshold);
     aubio_pitch_do(harm->pitches[(int)*harm->pitch_method],
      harm->ab_in, harm->ab_out);
     new_pitch = fvec_get_sample(harm->ab_out, 0);

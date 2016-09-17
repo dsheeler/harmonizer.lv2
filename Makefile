@@ -102,6 +102,10 @@ AUBIO_SRCS = $(BUILDDIR)mathutils.c $(BUILDDIR)fvec.c $(BUILDDIR)onset.c $(BUILD
 						 $(BUILDDIR)pitchmcomb.c $(BUILDDIR)pitchschmitt.c $(BUILDDIR)fft.c $(BUILDDIR)ooura_fft8g.c $(BUILDDIR)c_weighting.c \
 						 $(BUILDDIR)phasevoc.c
 AUBIO_OBJS= $(AUBIO_SRCS:.c=.o)
+
+SRCS = $(BUILDDIR)RingBuffer.cpp
+OBJS = $(SRCS:.cpp=.o)
+
 .SUFFIXES:
 
 .SUFFIXES: .c
@@ -117,12 +121,17 @@ aubio_init:
 	$(CC) $(CFLAGS) -I $(BUILDDIR) -c \
 	$< -o $@
 
-$(BUILDDIR)$(LV2NAME)$(LIB_EXT): $(LV2NAME).cpp $(AUBIO_OBJS)
+$(BUILDDIR)%.o : %.cpp
+	@mkdir -p $(BUILDDIR)
+	$(CC) $(CFLAGS) -I $(BUILDDIR) -c \
+	$< -o $@
+
+$(BUILDDIR)$(LV2NAME)$(LIB_EXT): $(LV2NAME).cpp $(OBJS) $(AUBIO_OBJS)
 	@mkdir -p $(BUILDDIR)
 	$(CC) $(CPPFLAGS) $(CFLAGS) \
 	  -o $(BUILDDIR)$(LV2NAME)$(LIB_EXT) $(LV2NAME).cpp \
 		-shared $(LV2LDFLAGS) $(LDFLAGS) $(LOADLIBES) \
-		$(AUBIO_OBJS)
+		$(AUBIO_OBJS) $(OBJS)
 	$(STRIP) $(STRIPFLAGS) $(BUILDDIR)$(LV2NAME)$(LIB_EXT)
 
 $(BUILDDIR)modgui: $(BUILDDIR)$(LV2NAME).ttl
