@@ -1,6 +1,7 @@
 harmonizer.lv2 - detects notes; audio to midi
 
-harmonizer.lv2  uses the aubio toolkit for note onset and pitch detection on audio input and outputs midi.
+harmonizer.lv2  uses the aubio toolkit for note onset and pitch detection
+on audio input and outputs midi.
 
 Install
 
@@ -10,4 +11,6 @@ Compiling stepseq requires the LV2 SDK, bash, gnu-make, and a c-compiler.
   cd harmonizer.lv2
   make
   sudo make install PREFIX=/usr
-Note to packagers: The Makefile honors PREFIX and DESTDIR variables as well as CFLAGS, LDFLAGS and OPTIMIZATIONS (additions to CFLAGS), also see the first 10 lines of the Makefile.
+
+Note to packagers: The Makefile honors PREFIX and DESTDIR variables as well
+ as CFLAGS, LDFLAGS and OPTIMIZATIONS (additions to CFLAGS).
