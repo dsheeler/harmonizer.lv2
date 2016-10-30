@@ -70,14 +70,12 @@ endif
 
 override CFLAGS += -fPIC
 override CFLAGS += `pkg-config --cflags lv2`
-#override CFLAGS += `pkg-config --cflags aubio`
-
-#override LDFLAGS += `pkg-config --libs aubio`
+override CFLAGS += -Isrc/aubio
 
 # build target definitions
 default: all
 
-all: aubio $(BUILDDIR)manifest.ttl $(BUILDDIR)$(LV2NAME).ttl $(targets)
+all: initialize $(BUILDDIR)manifest.ttl $(BUILDDIR)$(LV2NAME).ttl $(targets)
 
 lv2syms:
 	echo "_lv2_descriptor" > lv2syms
@@ -110,32 +108,31 @@ OBJS = $(SRCS:.cpp=.o)
 
 .SUFFIXES: .c
 
-aubio: aubio_init
+initialize: init
 
-aubio_init:
+init:
 	@mkdir -p $(BUILDDIR)
-	cp -r aubio/* $(BUILDDIR)
+#	cp -rp src/*.cpp src/*.h $(BUILDDIR)
+#	cp -rp src/aubio/* $(BUILDDIR)
 
-%.o : %.c
+$(BUILDDIR)%.o : src/aubio/%.c
+	@mkdir -p $(BUILDDIR)
+	$(CC) $(CFLAGS) -I src/aubio -c \
+	$< -o $@
+
+$(BUILDDIR)%.o : src/%.cpp
 	@mkdir -p $(BUILDDIR)
 	$(CC) $(CFLAGS) -I $(BUILDDIR) -c \
 	$< -o $@
 
-$(BUILDDIR)%.o : %.cpp
-	@mkdir -p $(BUILDDIR)
-	$(CC) $(CFLAGS) -I $(BUILDDIR) -c \
-	$< -o $@
-
-$(BUILDDIR)$(LV2NAME)$(LIB_EXT): $(LV2NAME).cpp $(OBJS) $(AUBIO_OBJS)
-	@mkdir -p $(BUILDDIR)
+$(BUILDDIR)$(LV2NAME)$(LIB_EXT): src/$(LV2NAME).cpp $(OBJS) $(AUBIO_OBJS)
 	$(CC) $(CPPFLAGS) $(CFLAGS) \
-	  -o $(BUILDDIR)$(LV2NAME)$(LIB_EXT) $(LV2NAME).cpp \
+	  -o $@ $< \
 		-shared $(LV2LDFLAGS) $(LDFLAGS) $(LOADLIBES) \
 		$(AUBIO_OBJS) $(OBJS)
 	$(STRIP) $(STRIPFLAGS) $(BUILDDIR)$(LV2NAME)$(LIB_EXT)
 
 $(BUILDDIR)modgui: $(BUILDDIR)$(LV2NAME).ttl
-	@mkdir -p $(BUILDDIR)/modgui
 	cp -r modgui/* $(BUILDDIR)modgui/
 
 # install/uninstall/clean target definitions
@@ -158,8 +155,9 @@ uninstall:
 
 clean:
 	rm -f $(BUILDDIR)manifest.ttl $(BUILDDIR)$(LV2NAME).ttl \
-		$(BUILDDIR)/*.o  $(BUILDDIR)$(LV2NAME)$(LIB_EXT) lv2syms
+	 $(BUILDDIR)$(LV2NAME)$(LIB_EXT) lv2syms
 	rm -rf $(BUILDDIR)modgui
-	-test -d $(BUILDDIR) && rmdir $(BUILDDIR) || true
+	
+	-test -d $(BUILDDIR) && rm -rf $(BUILDDIR) || true
 
 .PHONY: clean all install uninstall

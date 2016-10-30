@@ -141,7 +141,7 @@
   lv2:index 4 ;
   lv2:symbol "pitch_threshold" ;
   lv2:name "Pitch Detection Threshold";
-  lv2:default 0.85 ;
+  lv2:default 0.3 ;
   lv2:minimum 0.0 ;
   lv2:maximum 1.0 ;
   lv2:scalePoint [
