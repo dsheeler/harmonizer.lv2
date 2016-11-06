@@ -6,7 +6,7 @@ on audio input and outputs midi.
 
 Install
 -------
-Compiling stepseq requires the LV2 SDK, bash, gnu-make, and a c-compiler.
+Compiling harmonizer requires the LV2 SDK, bash, gnu-make, and a c-compiler.
 
 ```bash
   git clone git://github.com/dsheeler/harmonizer.lv2.git
