@@ -81,7 +81,6 @@ typedef struct {
   harmonizer_URIs uris;
   LV2_Atom_Forge forge;
   LV2_Atom_Forge_Frame frame;
-  uint32_t frame_offset;
   const float* onset_method;
   const float* onset_threshold;
 	const float* silence_threshold;
@@ -92,11 +91,8 @@ typedef struct {
   RingBuffer* ringbuf;
   smpl_t bufsize;
   smpl_t hopsize;
-  char_t *pitch_unit;
-  fvec_t *pitch;
   uint_t median;
   uint_t overruns;
-  smpl_t newnote;
   uint_t isready;
   smpl_t curnote;
   smpl_t curlevel;
@@ -326,8 +322,7 @@ run(LV2_Handle instance, uint32_t n_samples)
         harm->isready++;
       if (harm->isready == harm->median) {
         send_noteoff(harm->curnote, 0, harm);
-        harm->newnote = get_note(harm->note_buffer, harm->note_buffer2);
-        harm->curnote = harm->newnote;
+        harm->curnote = get_note(harm->note_buffer, harm->note_buffer2);
         if (harm->curnote > 0) {
           send_noteon(harm->curnote, 127+(int)floorf(harm->curlevel), harm);
         }
@@ -351,6 +346,7 @@ cleanup(LV2_Handle instance)
 	del_fvec(harm->ab_out);
 	del_fvec(harm->note_buffer);
 	del_fvec(harm->note_buffer2);
+	delete(harm->ringbuf);
 	free(harm);
 }
 
