@@ -30,7 +30,7 @@
   lv2:default 0 ;
   lv2:minimum 0 ;
   lv2:maximum 8 ;
-  lv2:portProperty lv2:float, lv2:enumeration ;
+  lv2:portProperty lv2:enumeration ;
   lv2:scalePoint  [
   rdfs:label "default (hfc)" ;
   rdf:value 0
@@ -66,27 +66,15 @@
   lv2:symbol "onset_threshold" ;
   lv2:name "Onset Threshold";
   lv2:default 0.3 ;
-  lv2:minimum 0.0 ;
+  lv2:minimum 0.1 ;
   lv2:maximum 1.0 ;
   lv2:scalePoint [
-  rdfs:label "0" ;
-  rdf:value 0.0
-  ];
-  lv2:scalePoint [
-  rdfs:label "0.001" ;
-  rdf:value 0.001
+  rdfs:label "0.1" ;
+  rdf:value 0.1
   ];
   lv2:scalePoint [
   rdfs:label "0.3" ;
   rdf:value 0.3
-  ];
-  lv2:scalePoint [
-  rdfs:label "0.5" ;
-  rdf:value 0.5
-  ];
-  lv2:scalePoint [
-  rdfs:label "0.9" ;
-  rdf:value 0.9
   ];
   lv2:scalePoint [
   rdfs:label "1" ;
@@ -103,10 +91,14 @@
   lv2:maximum -10.0 ;
   units:unit units:db ;
   lv2:scalePoint [
-  rdfs:label "20" ;
-  rdf:value 20.0
+  rdfs:label "-90.0" ;
+  rdf:value -90.0
   ];
-  ], [
+  lv2:scalePoint [
+  rdfs:label "-10" ;
+  rdf:value -10.0
+  ];
+	], [
   a lv2:InputPort ,
   lv2:ControlPort ;
   lv2:index 3 ;
@@ -115,7 +107,7 @@
   lv2:default 0 ;
   lv2:minimum 0 ;
   lv2:maximum 5 ;
-  lv2:portProperty lv2:float, lv2:enumeration ;
+  lv2:portProperty lv2:enumeration ;
   lv2:scalePoint  [
   rdfs:label "default (yinfft)" ;
   rdf:value 0
@@ -140,29 +132,21 @@
   lv2:ControlPort ;
   lv2:index 4 ;
   lv2:symbol "pitch_threshold" ;
-  lv2:name "Pitch Detection Threshold";
+  lv2:name "Pitch Detection Tolerance";
   lv2:default 0.3 ;
-  lv2:minimum 0.0 ;
-  lv2:maximum 1.0 ;
+  lv2:minimum 0.1 ;
+  lv2:maximum 0.7 ;
   lv2:scalePoint [
-  rdfs:label "0" ;
-  rdf:value 0.0
+  rdfs:label "0.1" ;
+  rdf:value 0.1
   ];
   lv2:scalePoint [
-  rdfs:label "0.0" ;
-  rdf:value 0.0
+  rdfs:label "0.3" ;
+  rdf:value 0.3
   ];
   lv2:scalePoint [
-  rdfs:label "0.15" ;
-  rdf:value 0.15
-  ];
-  lv2:scalePoint [
-  rdfs:label "0.85" ;
-  rdf:value 0.85
-  ];
-  lv2:scalePoint [
-  rdfs:label "1" ;
-  rdf:value 1.0
+  rdfs:label "0.7" ;
+  rdf:value 0.7
   ];
   ], [
   a lv2:AudioPort ,

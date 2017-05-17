@@ -1,6 +1,5 @@
 /*
-  Copyright 2006-2011 David Robillard <d@drobilla.net>
-  Copyright 2006 Steve Harris <steve@plugin.org.uk>
+  Copyright 2017 Daniel Sheeler <dsheeler@pobox.com>
 
   Permission to use, copy, modify, and/or distribute this software for any
   purpose with or without fee is hereby granted, provided that the above
@@ -296,7 +295,6 @@ run(LV2_Handle instance, uint32_t n_samples)
       lv2_log_trace(&harm->logger, "overrun on ringbuf: %d\n", harm->overruns);
     }
   }
-  lv2_log_trace(&harm->logger, "ringbuf avail: %d\n", harm->ringbuf->GetReadAvail());
   while (harm->ringbuf->GetReadAvail() >= sizeof(smpl_t) * harm->hopsize) {
     harm->ringbuf->Read((unsigned char*)harm->ab_in->data, sizeof(smpl_t)
      * harm->hopsize);
@@ -343,8 +341,16 @@ cleanup(LV2_Handle instance)
 {
   Harmonizer *harm = (Harmonizer*)instance;
   for (uint i = 0; i < NUM_ONSET_METHODS; i++) {
-    //del_aubio_onset(harm->onsets[(char *)onset_methods[i]]);
+    del_aubio_onset(harm->onsets[i]);
   }
+  for (uint i = 0; i < NUM_PITCH_METHODS; i++) {
+    del_aubio_pitch(harm->pitches[i]);
+  }
+	del_fvec(harm->onset);
+	del_fvec(harm->ab_in);
+	del_fvec(harm->ab_out);
+	del_fvec(harm->note_buffer);
+	del_fvec(harm->note_buffer2);
 	free(harm);
 }
 
